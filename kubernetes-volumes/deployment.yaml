@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homework-deployment
+  namespace: homework
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: homework-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: homework-app
+    spec:
+      nodeSelector:
+        homework: "true"
+
+      volumes:
+        - name: homework-volume
+          persistentVolumeClaim:
+            claimName: homework-pvc
+        - name: homework-conf
+          configMap:
+            name: homework-conf
+      initContainers:
+        - name: init-index
+          image: busybox:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - echo '<h1>Hello from homework</h1>' > /init/index.html
+          volumeMounts:
+            - name: homework-volume
+              mountPath: /init
+      containers:
+        - name: web
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              httpd -f -p 8000 -h /homework
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: homework-volume
+              mountPath: /homework
+            - name: homework-conf
+              mountPath: /homework/conf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
